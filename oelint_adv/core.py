@@ -79,7 +79,9 @@ def group_files(files: Iterable[str], mode: str) -> List[Tuple[List[str], List[s
     # the bb files in the stash
     res = {}
     for f in files:
-        _filename, _ext = os.path.splitext(f)
+        # Use absolute path for consistent handling
+        _abs_f = os.path.abspath(f)
+        _filename, _ext = os.path.splitext(_abs_f)
         if _ext not in ['.bb']:
             continue
         if '_' in os.path.basename(_filename):
@@ -88,28 +90,32 @@ def group_files(files: Iterable[str], mode: str) -> List[Tuple[List[str], List[s
             _filename_key = os.path.basename(_filename)
         if _filename_key not in res:  # pragma: no cover
             res[_filename_key] = set()
-        res[_filename_key].add(f)
+        res[_filename_key].add(_abs_f)
 
     # second round now for the bbappend files
     for f in files:
-        _filename, _ext = os.path.splitext(f)
+        # Use absolute path for consistent handling
+        _abs_f = os.path.abspath(f)
+        _filename, _ext = os.path.splitext(_abs_f)
         if _ext not in ['.bbappend']:
             continue
         _match = False
         for _, v in res.items():
             _needle = '^.*/' + re.escape(os.path.basename(_filename)).replace('%', '.*') + '.bb$'
             if any(RegexRpl.match(_needle, x, re.MULTILINE) for x in v):
-                v.add(f)
+                v.add(_abs_f)
                 _match = True
         if not _match:
             _filename_key = os.path.basename(_filename).replace('%', '')
             if _filename_key not in res:  # pragma: no cover
                 res[_filename_key] = set()
-            res[_filename_key].add(f)
+            res[_filename_key].add(_abs_f)
 
     # third round for lone bbclasses
     for f in files:
-        _filename, _ext = os.path.splitext(f)
+        # Use absolute path for consistent handling
+        _abs_f = os.path.abspath(f)
+        _filename, _ext = os.path.splitext(_abs_f)
         if _ext not in ['.bbclass']:
             continue
         if '_' in os.path.basename(_filename):
@@ -118,10 +124,27 @@ def group_files(files: Iterable[str], mode: str) -> List[Tuple[List[str], List[s
             _filename_key = os.path.basename(_filename)
         if _filename_key not in res:  # pragma: no cover
             res[_filename_key] = set()
-        res[_filename_key].add(f)
+        res[_filename_key].add(_abs_f)
+
+    # fourth round for lone .inc files
+    for f in files:
+        # Use absolute path for consistent handling
+        _abs_f = os.path.abspath(f)
+        _filename, _ext = os.path.splitext(_abs_f)
+        if _ext not in ['.inc']:
+            continue
+        if '_' in os.path.basename(_filename):
+            _filename_key = _filename
+        else:
+            _filename_key = os.path.basename(_filename)
+        if _filename_key not in res:  # pragma: no cover
+            res[_filename_key] = set()
+        res[_filename_key].add(_abs_f)
 
     # layer.confs
-    _conf_layer = sorted([x for x in files if os.path.basename(x) == 'layer.conf'], key=lambda index: files.index(index))
+    # Convert to absolute paths and preserve original order
+    _layer_files = [(i, x) for i, x in enumerate(files) if os.path.basename(x) == 'layer.conf']
+    _conf_layer = [os.path.abspath(x[1]) for x in sorted(_layer_files, key=lambda item: item[0])]
 
     _product_matrix = []
     _conf_machine = []
@@ -129,8 +152,13 @@ def group_files(files: Iterable[str], mode: str) -> List[Tuple[List[str], List[s
 
     # as sets are unordered, we convert them to sorted lists at this point
     # order is like the files have been passed via CLI
+    # Create a mapping of absolute paths to original indices
+    abs_to_original = {}
+    for i, f in enumerate(files):
+        abs_to_original[os.path.abspath(f)] = i
+    
     for k, v in res.items():
-        res[k] = sorted(v, key=lambda index: files.index(index))
+        res[k] = sorted(v, key=lambda index: abs_to_original.get(index, len(files)))
 
     if mode in ['all']:
         # machine.confs
@@ -151,7 +179,7 @@ def group_files(files: Iterable[str], mode: str) -> List[Tuple[List[str], List[s
     group_res = []
 
     for fg in res.values():
-        _fl = sorted(fg, key=lambda index: files.index(index))
+        _fl = sorted(fg, key=lambda index: abs_to_original.get(index, len(files)))
         for element in itertools.product(*_product_matrix):
             _branch_expansion = element[-1]
             _matrix_keys = [f'branch:{"false" if _branch_expansion else "true"}']
@@ -229,7 +257,11 @@ def group_run(group: List[Tuple],
         rule.set_product_matrix(matrix)
         rule.set_rungroup(group_files)
 
-    _files = list(set(stash.GetRecipes() + stash.GetLoneAppends() + stash.GetConfFiles() + stash.GetBBClasses()))
+    # Get all files including .inc files
+    _recipe_files = stash.GetRecipes() + stash.GetLoneAppends() + stash.GetConfFiles() + stash.GetBBClasses()
+    # Add .inc files by getting all added files from group_files that end with .inc
+    _inc_files = [f for f in group_files if f.endswith('.inc')]
+    _files = list(set(_recipe_files + _inc_files))
     issues = []
     for _, f in enumerate(_files):
         _classification = Rule.classify_file(f)

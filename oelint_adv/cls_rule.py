@@ -21,6 +21,7 @@ class Classification(Enum):
     MACHINECONF = 3
     DISTROCONF = 4
     LAYERCONF = 5
+    INC = 6
 
     @staticmethod
     def tostr(val) -> str:
@@ -34,6 +35,8 @@ class Classification(Enum):
             return 'machine configuration'
         if val == Classification.DISTROCONF:
             return 'distro configuration'
+        if val == Classification.INC:
+            return 'include file'
         return 'layer configuration'
 
 
@@ -70,6 +73,7 @@ class Rule:
             Classification.BBAPPEND,
             Classification.BBCLASS,
             Classification.DISTROCONF,
+            Classification.INC,
             Classification.LAYERCONF,
             Classification.MACHINECONF,
             Classification.RECIPE,
@@ -94,6 +98,8 @@ class Rule:
             return [Classification.BBAPPEND]
         if fnmatch.fnmatch(fn, '*.bb'):
             return [Classification.RECIPE]
+        if fnmatch.fnmatch(fn, '*.inc'):
+            return [Classification.INC]
         if fnmatch.fnmatch(fn, '*/machine/*.conf'):
             return [Classification.MACHINECONF]
         if fnmatch.fnmatch(fn, '*/distro/*.conf'):
