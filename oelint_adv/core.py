@@ -127,12 +127,48 @@ def group_files(files: Iterable[str], mode: str) -> List[Tuple[List[str], List[s
         res[_filename_key].add(_abs_f)
 
     # fourth round for lone .inc files
+    # Check if .inc files might already be included by .bb files to avoid duplication
+    _potential_includes = set()
+    _bb_files = []
+    for f in files:
+        _abs_f = os.path.abspath(f)
+        _filename, _ext = os.path.splitext(_abs_f)
+        if _ext == '.bb':
+            _bb_files.append(_abs_f)
+            # Check for potential .inc files that might be included
+            _dir = os.path.dirname(_abs_f)
+            _basename = os.path.basename(_filename)
+            _potential_includes.add(os.path.join(_dir, _basename + '.inc'))
+    
+    # For more accurate detection, also check include/require statements in .bb files
+    for bb_file in _bb_files:
+        try:
+            with open(bb_file, 'r') as f:
+                content = f.read()
+                # Look for include/require statements
+                import re
+                matches = re.findall(r'(?:include|require)\s+([^\s\n]+)', content)
+                for match in matches:
+                    # Handle relative paths
+                    if not os.path.isabs(match):
+                        include_path = os.path.join(os.path.dirname(bb_file), match)
+                        _potential_includes.add(os.path.abspath(include_path))
+                    else:
+                        _potential_includes.add(match)
+        except (IOError, OSError):
+            pass  # If we can't read the file, just skip this optimization
+    
     for f in files:
         # Use absolute path for consistent handling
         _abs_f = os.path.abspath(f)
         _filename, _ext = os.path.splitext(_abs_f)
         if _ext not in ['.inc']:
             continue
+        
+        # Skip .inc files that are likely to be auto-included by .bb files
+        if _abs_f in _potential_includes:
+            continue
+            
         if '_' in os.path.basename(_filename):
             _filename_key = _filename
         else:
