@@ -146,7 +146,6 @@ def group_files(files: Iterable[str], mode: str) -> List[Tuple[List[str], List[s
             with open(bb_file, 'r') as f:
                 content = f.read()
                 # Look for include/require statements
-                import re
                 matches = re.findall(r'(?:include|require)\s+([^\s\n]+)', content)
                 for match in matches:
                     # Handle relative paths
