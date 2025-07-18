@@ -188,7 +188,8 @@ class Rule:
                 override_msg: str = None,
                 appendix: str = None,
                 blockoffset: int = 0,
-                severity_override: str = '') -> Tuple[Tuple[str, int], List[str], str]:
+                severity_override: str = '',
+                wikiurl: str = None) -> Tuple[Tuple[str, int], List[str], str]:
         """Called by rule to indicate a finding
 
         Arguments:
@@ -200,6 +201,7 @@ class Rule:
             appendix {str} -- Optional appendix to rule ID (default: {None})
             blockoffset {int} -- line number to look for inline suppressions instead of _line (default: 0 == use _line)
             severity_override {str} -- override the base severity (empty == use base)
+            wikiurl {str} -- Optional wiki URL override (default: {None})
 
         Returns:
             Tuple[Tuple[str, int], List[str], str] -- Path, line, matrix, Human readable finding (possibly with color codes)
@@ -239,7 +241,8 @@ class Rule:
             _color = self._state.get_color_by_severity(_severity)
             _style = Style.RESET_ALL
 
-        wikiurl = f'https://github.com/priv-kweihmann/oelint-adv/blob/{__version__}/docs/wiki/{self.ID}.md'
+        if wikiurl is None:
+            wikiurl = f'https://github.com/priv-kweihmann/oelint-adv/blob/{__version__}/docs/wiki/{self.ID}.md'
 
         _msg = self._state.get_messageformat().format(path=_path, line=_line, severity=_severity,
                                                       id=_display_id, msg=override_msg,
